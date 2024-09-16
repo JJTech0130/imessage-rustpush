@@ -1,0 +1,15 @@
+.idea
+
+*.yaml
+!.pre-commit-config.yaml
+!example-config.yaml
+
+*.json
+*.db
+*.db-shm
+*.db-wal
+*.log
+*.bak
+
+/imessage-rustpush
+/start
