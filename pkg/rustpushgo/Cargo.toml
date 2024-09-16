@@ -4,8 +4,8 @@ version = "0.0.1"
 edition = "2021"
 
 [lib]
-crate-type = ["cdylib"]
-name = "rustpushgo" # This is our crate name in this tutorial
+crate-type = ["staticlib"]
+name = "rustpushgo"
 
 [dependencies]
 uniffi = { version = "0.25.0" }

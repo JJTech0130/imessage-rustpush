@@ -1,6 +1,7 @@
 uniffi::include_scaffolding!("rustpushgo");
 
 pub fn add(left: u32, right: u32) -> u32 {
+    println!("Adding {} and {}", left, right);
     left + right
 }
 

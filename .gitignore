@@ -13,7 +13,7 @@
 
 /imessage-rustpush
 /start
-/librustpushgo.dylib
+/librustpushgo.a
 
 out/
 target/
