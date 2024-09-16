@@ -1,0 +1,15 @@
+[package]
+name = "rustpushgo"
+version = "0.0.1"
+edition = "2021"
+
+[lib]
+crate-type = ["cdylib"]
+name = "rustpushgo" # This is our crate name in this tutorial
+
+[dependencies]
+uniffi = { version = "0.25.0" }
+
+[build-dependencies]
+uniffi = { version = "0.25.0", features = [ "build" ] }
+uniffi-bindgen-go = { git = "https://github.com/NordSecurity/uniffi-bindgen-go", tag = "v0.2.1+v0.25.0", version = "0.2.1" }
