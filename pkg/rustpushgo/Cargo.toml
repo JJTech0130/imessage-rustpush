@@ -9,6 +9,7 @@ name = "rustpushgo"
 
 [dependencies]
 uniffi = { version = "0.25.0" }
+icloud_auth = { git = "https://github.com/OpenBubbles/apple-private-apis", branch = "master" }
 rustpush = { git = "https://github.com/OpenBubbles/rustpush", branch = "master", default-features = false }
 
 [build-dependencies]

@@ -2368,6 +2368,7 @@ dependencies = [
 name = "rustpushgo"
 version = "0.0.1"
 dependencies = [
+ "icloud_auth",
  "rustpush",
  "uniffi",
  "uniffi-bindgen-go",

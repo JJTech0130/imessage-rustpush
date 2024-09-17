@@ -1,6 +1,6 @@
 package rustpushgo
 
-import "github.com/JJTech0130/imessage-rustpush/pkg/rustpushgo/out/rustpush"
+import "github.com/JJTech0130/imessage-rustpush/pkg/rustpushgo/out/rustpushgo"
 
 /*
 #cgo LDFLAGS: -lrustpushgo -ldl -lm
@@ -8,5 +8,5 @@ import "github.com/JJTech0130/imessage-rustpush/pkg/rustpushgo/out/rustpush"
 import "C"
 
 func Init() {
-	rustpush.Add(1, 1)
+	rustpushgo.Add(1, 1)
 }

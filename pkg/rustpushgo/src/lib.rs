@@ -1,5 +1,4 @@
-uniffi::include_scaffolding!("rustpushgo");
-
+#[uniffi::export]
 pub fn add(left: u32, right: u32) -> u32 {
     println!("Adding {} and {}", left, right);
     left + right
@@ -15,3 +14,5 @@ mod tests {
         assert_eq!(result, 4);
     }
 }
+
+uniffi::setup_scaffolding!();
