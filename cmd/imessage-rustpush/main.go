@@ -13,7 +13,7 @@ var (
 )
 
 func main() {
-	rustpushgo.Init()
+	rustpushgo.Login("test", "test")
 	return
 	/*m := mxmain.BridgeMain{
 		Name: "imessage-rustpush",
