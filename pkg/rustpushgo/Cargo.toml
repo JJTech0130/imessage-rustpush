@@ -16,4 +16,3 @@ rustpush = { git = "https://github.com/OpenBubbles/rustpush", branch = "master",
 
 [build-dependencies]
 uniffi = { version = "0.25.0", features = [ "build" ] }
-uniffi-bindgen-go = { git = "https://github.com/NordSecurity/uniffi-bindgen-go", tag = "v0.2.1+v0.25.0", version = "0.2.1" }
