@@ -2331,7 +2331,7 @@ dependencies = [
 [[package]]
 name = "rustpush"
 version = "0.1.0"
-source = "git+https://github.com/OpenBubbles/rustpush?branch=master#24944d0b7c58f6845973aa3d6bafdd013dcd1d1c"
+source = "git+https://github.com/OpenBubbles/rustpush?branch=master#5bd615173e78d95c36027a341289b3399897394f"
 dependencies = [
  "async-recursion",
  "async-trait",
