@@ -9,6 +9,7 @@ name = "rustpushgo"
 
 [dependencies]
 uniffi = { version = "0.25.0" }
+rustpush = { git = "https://github.com/OpenBubbles/rustpush", branch = "master", default-features = false }
 
 [build-dependencies]
 uniffi = { version = "0.25.0", features = [ "build" ] }
