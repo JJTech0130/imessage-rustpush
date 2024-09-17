@@ -41,6 +41,7 @@
             pkg-config
             # Libraries
             protobuf
+            zlib
             # Build tools
             # uniffi-bindgen-go
           ];
