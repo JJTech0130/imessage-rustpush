@@ -1,6 +1,6 @@
 use std::sync::Arc;
 
-use tokio::{runtime::Runtime, sync::RwLock};
+use tokio::{runtime::Runtime, sync::RwLock, task::JoinHandle};
 use icloud_auth::{AnisetteConfiguration, AppleAccount};
 
 #[uniffi::export]
@@ -31,19 +31,14 @@ pub struct WrappedRuntime {
 }
 
 #[uniffi::export]
-pub async fn login(username: String, password: String, rt: &WrappedRuntime) -> String {
-    let _guard = rt.rt[0].enter();
-    println!("Logging in with username: {} and password: {}", username, password);
+pub async fn login(username: String, password: String, rt: &WrappedRuntime) {
+    let join: JoinHandle<_> = rt.rt[0].spawn(async {
+        // Just sleep async as a test
+        tokio::time::sleep(tokio::time::Duration::from_secs(5)).await;
+    });
 
-    let config = AnisetteConfiguration::new();
-
-    // let account = AppleAccount::login(|| {
-    //     (username.clone(), password.clone())
-    // }, || {
-    //     "2fa code".to_string()
-    // }, config).await.unwrap();
-
-    "Logged in".to_string()
+    // Wait for the async task to finish
+    join.await.unwrap();
 }
 
 #[cfg(test)]
