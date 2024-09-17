@@ -1,6 +1,9 @@
 #!/bin/sh
 set -e
 
+# Must set a deployment target so that Rust and Go agree
+export MACOSX_DEPLOYMENT_TARGET=14.2
+
 ./build-rust.sh
 
 # Fix for libolm through homebrew
