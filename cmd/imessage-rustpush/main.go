@@ -13,7 +13,12 @@ var (
 )
 
 func main() {
-	rustpushgo.Login("test", "test")
+	rustpushgo.Init()
+	cfg := rustpushgo.CreateRelayConfig("65RQ-redacted-75AS-EA3A")
+	conn := rustpushgo.Connect(cfg)
+	rustpushgo.Login("redacted@icloud.com", "redacted", cfg, conn)
+	
+	//rustpushgo.Test()
 	return
 	/*m := mxmain.BridgeMain{
 		Name: "imessage-rustpush",

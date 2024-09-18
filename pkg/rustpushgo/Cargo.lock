@@ -2489,11 +2489,37 @@ dependencies = [
 name = "rustpushgo"
 version = "0.0.1"
 dependencies = [
+ "async-recursion",
  "async-std",
+ "async-trait",
+ "backon",
+ "base64 0.21.7",
+ "deku",
+ "flume",
+ "futures",
+ "html-escape",
  "icloud_auth",
+ "libflate",
+ "log",
+ "openssl",
+ "plist",
+ "pretty_env_logger",
+ "prost",
+ "rand",
+ "rasn",
+ "regex",
+ "reqwest",
+ "rustls 0.21.12",
+ "rustls-pemfile",
  "rustpush",
+ "serde",
+ "thiserror",
  "tokio",
+ "tokio-rustls",
  "uniffi",
+ "uuid",
+ "xml-rs",
+ "zip",
 ]
 
 [[package]]
