@@ -120,6 +120,8 @@ func (a *AppleIDLogin) SubmitUserInput(ctx context.Context, input map[string]str
 		identity:        a.usersAndIdentity.Identity,
 		initialAPSState: rustpushgo.NewWrappedApsState(nil),
 	}
+	
+	a.Client.Connection = a.conn
 
 	err := a.Client.Connect(ctx)
 	if err != nil {
@@ -137,6 +139,7 @@ func (a *AppleIDLogin) SubmitUserInput(ctx context.Context, input map[string]str
 		},
 	}, &bridgev2.NewLoginParams{
 		LoadUserLogin: func(ctx context.Context, login *bridgev2.UserLogin) error {
+			a.Client.UserLogin = login
 			login.Client = a.Client
 			return nil
 		},

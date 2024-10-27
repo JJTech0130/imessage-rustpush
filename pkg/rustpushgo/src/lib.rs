@@ -159,6 +159,16 @@ impl Client {
             self.client.identity.refresh_now().await.unwrap();
         }).await.unwrap();
     }
+
+    pub async fn get_handles(self: Arc<Self>) -> Vec<String> {
+        self.client.identity.get_handles().await
+    }
+
+    pub async fn validate_targets(self: Arc<Self>, targets: Vec<String>, handle: String) -> Vec<String>  {
+        runtime().spawn(async move {
+            self.client.identity.validate_targets(&targets, &handle).await.unwrap()
+        }).await.unwrap()
+    }
 }
 
 //impl
