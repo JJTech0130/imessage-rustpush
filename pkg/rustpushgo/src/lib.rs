@@ -14,7 +14,7 @@ use rustpush::{
 };
 use tokio::sync::{mpsc, Mutex};
 use wrappers::{
-    WrappedAPSConnection, WrappedAPSState, WrappedIDSUsers, WrappedIDSUsersWithIdentity, WrappedOSConfig
+    IDSUsersWithIdentityRecord, WrappedAPSConnection, WrappedAPSState, WrappedIDSUserIdentity, WrappedIDSUsers, WrappedOSConfig
 };
 
 #[uniffi::export]
@@ -44,7 +44,7 @@ pub async fn login(
     password: String,
     config: &WrappedOSConfig,
     connection: &WrappedAPSConnection,
-) -> Arc<WrappedIDSUsersWithIdentity> {
+) -> IDSUsersWithIdentityRecord {
     let config = config.config.clone();
     let connection = connection.inner.clone();
 
@@ -102,34 +102,39 @@ pub async fn login(
         .await
         .unwrap();
 
-    Arc::new(WrappedIDSUsersWithIdentity {
-        users: users,
-        identity: identity,
-    })
+    IDSUsersWithIdentityRecord {
+        users: Arc::new(WrappedIDSUsers {
+            inner: users
+        }),
+        identity: Arc::new(WrappedIDSUserIdentity {
+            inner: identity
+        }),
+    }
 }
 
 
 #[derive(uniffi::Object)]
-pub struct IMessageClient {
+pub struct Client {
     pub client: IMClient,
     pub users_update_channel: Mutex<mpsc::UnboundedReceiver<WrappedIDSUsers>>,
 }
 
 #[uniffi::export]
-impl IMessageClient {
+impl Client {
     #[uniffi::constructor]
     pub fn new(
         connection: &WrappedAPSConnection,
-        users: &WrappedIDSUsersWithIdentity,
+        users: &WrappedIDSUsers,
+        identity: &WrappedIDSUserIdentity,
         config: &WrappedOSConfig,
-    ) -> Arc<IMessageClient> {
+    ) -> Arc<Client> {
         let users_update_channel = tokio::sync::mpsc::unbounded_channel();
 
         let client = runtime().block_on(async move {
             IMClient::new(
                 connection.inner.clone(),
-                users.users.clone(),
-                users.identity.clone(),
+                users.inner.clone(),
+                identity.inner.clone(),
                 "id_cache.plist".into(),
                 config.config.clone(),
                 Box::new(move |updated_keys| {
@@ -142,7 +147,7 @@ impl IMessageClient {
             .await
         });
 
-        Arc::new(IMessageClient { client: client, users_update_channel: Mutex::new(users_update_channel.1) })
+        Arc::new(Client { client: client, users_update_channel: Mutex::new(users_update_channel.1) })
     }
 
     pub async fn get_updated_users(&self) -> Arc<WrappedIDSUsers> {

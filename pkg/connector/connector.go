@@ -2,57 +2,81 @@ package connector
 
 import (
 	"context"
+
+	"github.com/JJTech0130/imessage-rustpush/pkg/rustpushgo"
 	"go.mau.fi/util/configupgrade"
 	"maunium.net/go/mautrix/bridgev2"
 	"maunium.net/go/mautrix/bridgev2/database"
+	//"github.com/JJTech0130/imessage-rustpush/pkg/rustpushgo"
 )
 
 type IMessageConnector struct {
 	br *bridgev2.Bridge
 }
 
-// CreateLogin implements bridgev2.NetworkConnector.
-func (i *IMessageConnector) CreateLogin(ctx context.Context, user *bridgev2.User, flowID string) (bridgev2.LoginProcess, error) {
-	panic("unimplemented")
+func (im *IMessageConnector) GetCapabilities() *bridgev2.NetworkGeneralCapabilities {
+	return &bridgev2.NetworkGeneralCapabilities{}
 }
 
-// GetCapabilities implements bridgev2.NetworkConnector.
-func (i *IMessageConnector) GetCapabilities() *bridgev2.NetworkGeneralCapabilities {
-	panic("unimplemented")
+func (im *IMessageConnector) GetConfig() (example string, data any, upgrader configupgrade.Upgrader) {
+	return "", nil, configupgrade.NoopUpgrader
 }
 
-// GetConfig implements bridgev2.NetworkConnector.
-func (i *IMessageConnector) GetConfig() (example string, data any, upgrader configupgrade.Upgrader) {
-	panic("unimplemented")
+func (im *IMessageConnector) GetDBMetaTypes() database.MetaTypes {
+	return database.MetaTypes{
+		Portal:   nil,
+		Ghost:    nil,
+		Message:  nil,
+		Reaction: nil,
+		UserLogin: func() any {
+			return &UserLoginMetadata{}
+		},
+	}
 }
 
-// GetDBMetaTypes implements bridgev2.NetworkConnector.
-func (i *IMessageConnector) GetDBMetaTypes() database.MetaTypes {
-	panic("unimplemented")
+type UserLoginMetadata struct {
+	APSState    string `json:"aps_state"`
+	IDSUsers    string `json:"ids_users"`
+	IDSIdentity string `json:"ids_identity"`
+	RelayCode   string `json:"relay_code"`
 }
 
-// GetLoginFlows implements bridgev2.NetworkConnector.
-func (i *IMessageConnector) GetLoginFlows() []bridgev2.LoginFlow {
-	panic("unimplemented")
-}
-
-// GetName implements bridgev2.NetworkConnector.
-func (i *IMessageConnector) GetName() bridgev2.BridgeName {
-	panic("unimplemented")
+func (im *IMessageConnector) GetName() bridgev2.BridgeName {
+	return bridgev2.BridgeName{
+		DisplayName:      "iMessage",
+		NetworkURL:       "https://support.apple.com/messages",
+		NetworkIcon:      "mxc://maunium.net/tManJEpANASZvDVzvRvhILdX",
+		NetworkID:        "imessage",
+		BeeperBridgeType: "imessagego",
+		DefaultPort:      29337,
+	}
 }
 
 func (im *IMessageConnector) Init(bridge *bridgev2.Bridge) {
 	im.br = bridge
 }
 
-// LoadUserLogin implements bridgev2.NetworkConnector.
-func (i *IMessageConnector) LoadUserLogin(ctx context.Context, login *bridgev2.UserLogin) error {
-	panic("unimplemented")
+func (im *IMessageConnector) LoadUserLogin(ctx context.Context, login *bridgev2.UserLogin) error {
+	meta := login.Metadata.(*UserLoginMetadata)
+
+	users := rustpushgo.NewWrappedIdsUsers(&meta.IDSUsers)
+	identity := rustpushgo.NewWrappedIdsUserIdentity(&meta.IDSIdentity)
+	initialAPSState := rustpushgo.NewWrappedApsState(&meta.APSState)
+	cfg := rustpushgo.CreateRelayConfig(meta.RelayCode)
+
+	login.Client = &IMessageClient{
+		Main:            im,
+		Client:          nil,
+		config:          cfg,
+		users:           users,
+		identity:        identity,
+		initialAPSState: initialAPSState,
+	}
+
+	return nil
 }
 
 func (im *IMessageConnector) Start(ctx context.Context) error {
-
-	panic("unimplemented")
 	return nil
 }
 
