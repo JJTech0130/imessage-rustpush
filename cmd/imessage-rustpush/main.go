@@ -14,12 +14,17 @@ var (
 
 func main() {
 	rustpushgo.Init()
-	cfg := rustpushgo.CreateRelayConfig("65RQ-redacted-75AS-EA3A")
-	conn := rustpushgo.Connect(cfg)
-	rustpushgo.Login("redacted@icloud.com", "redacted", cfg, conn)
+	cfg := rustpushgo.CreateRelayConfig("K7EW-redacted-PXZ3-Q6BY")
+	conn := rustpushgo.Connect(cfg, rustpushgo.NewWrappedApsState(""))
+	users := rustpushgo.Login("redacted@icloud.com", "redacted", cfg, conn)
+
+	println("State: "+ conn.State().ToString())
+
+	im := rustpushgo.NewIMessageClient(conn, users, cfg)
 	
+	println(im)
 	//rustpushgo.Test()
-	return
+	//return
 	/*m := mxmain.BridgeMain{
 		Name: "imessage-rustpush",
 		Description: "An iMessage bridge based on rustpush",

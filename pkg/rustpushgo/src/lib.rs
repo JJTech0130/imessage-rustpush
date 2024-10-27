@@ -1,52 +1,51 @@
-
-pub mod ctx;
 pub mod config;
+pub mod ctx;
+pub mod wrappers;
+mod util;
 
-use std::{io::Cursor, path::PathBuf, str::FromStr, sync::Arc};
+use std::{path::PathBuf, str::FromStr, sync::Arc, vec};
 
-use config::WrappedRelayConfig;
 use ctx::runtime;
-use icloud_auth::{AnisetteConfiguration, AppleAccount, LoginClientInfo};
-use tokio::runtime::Runtime;
+use icloud_auth::{AnisetteConfiguration, AppleAccount};
 
-use base64::engine::general_purpose;
-use log::{info, error};
-use rustpush::{authenticate_apple, get_gateways_for_mccmnc, get_gsa_config, register, APSConnection, APSConnectionResource, APSState, ConversationData, IDSUser, IDSUserIdentity, IMClient, Message, MessageInst, MessageType, NormalMessage, RelayConfig};
-use tokio::{fs, io::{self, AsyncBufReadExt, BufReader}};
-use tokio::io::AsyncWriteExt;
-use uuid::Uuid;
-use serde::{Serialize, Deserialize};
-use std::io::Write;
-use base64::Engine;
-use rustpush::OSConfig;
-
-#[derive(uniffi::Object)]
-pub struct WrappedAPSConnection {
-    pub inner: APSConnection,
-}
+use log::info;
+use rustpush::{
+    authenticate_apple, get_gsa_config, register, 
+    APSConnectionResource, IDSUserIdentity, IMClient,
+};
+use wrappers::{
+    WrappedAPSConnection, WrappedAPSState, WrappedIDSUsersWithIdentity, WrappedOSConfig,
+};
 
 #[uniffi::export]
-pub async fn connect(config: &WrappedRelayConfig) -> Arc<WrappedAPSConnection> {
-    let config = config.inner.clone();
-    let connection = runtime().spawn(async move {
-        let (connection, error) = APSConnectionResource::new(config, None).await;
-        if let Some(error) = error {
-            panic!("{}", error);
-        }
-        connection
-    }).await.unwrap();
+pub async fn connect(
+    config: &WrappedOSConfig,
+    state: &WrappedAPSState,
+) -> Arc<WrappedAPSConnection> {
+    let config = config.config.clone();
+    let state = state.inner.clone();
+    let connection = runtime()
+        .spawn(async move {
+            let (connection, error) = APSConnectionResource::new(config, state).await;
+            if let Some(error) = error {
+                panic!("{}", error);
+            }
+            connection
+        })
+        .await
+        .unwrap();
 
     Arc::new(WrappedAPSConnection { inner: connection })
 }
 
-#[derive(uniffi::Object)]
-pub struct WrappedIDSUser {
-    pub inner: IDSUser,
-}
-
 #[uniffi::export]
-pub async fn login(apple_id: String, password: String, config: &WrappedRelayConfig, connection: &WrappedAPSConnection) -> Arc<WrappedIDSUser> {
-    let config = config.inner.clone();
+pub async fn login(
+    apple_id: String,
+    password: String,
+    config: &WrappedOSConfig,
+    connection: &WrappedAPSConnection,
+) -> Arc<WrappedIDSUsersWithIdentity> {
+    let config = config.config.clone();
     let connection = connection.inner.clone();
 
     let user_trimmed = apple_id.trim().to_string();
@@ -62,87 +61,108 @@ pub async fn login(apple_id: String, password: String, config: &WrappedRelayConf
         input.trim().to_string()
     };
 
-    let user = runtime().spawn(async move {
-        let acc = AppleAccount::login(appleid_closure, tfa_closure,AnisetteConfiguration::new()
-            .set_client_info(get_gsa_config(&*connection.state.read().await, config.as_ref()))
-            .set_configuration_path(PathBuf::from_str("anisette_test").unwrap())).await;
+    let (users, identity) = runtime()
+        .spawn(async move {
+            let acc = AppleAccount::login(
+                appleid_closure,
+                tfa_closure,
+                AnisetteConfiguration::new()
+                    .set_client_info(get_gsa_config(
+                        &*connection.state.read().await,
+                        config.as_ref(),
+                    ))
+                    .set_configuration_path(PathBuf::from_str("anisette_test").unwrap()),
+            )
+            .await;
 
-        let account = acc.unwrap();
-        let pet = account.get_pet().unwrap();
-        let user = authenticate_apple(&user_trimmed, &pet, config.as_ref()).await.unwrap();
+            let account = acc.unwrap();
+            let pet = account.get_pet().unwrap();
+            let user = authenticate_apple(&user_trimmed, &pet, config.as_ref())
+                .await
+                .unwrap();
 
-        let identity = IDSUserIdentity::new().unwrap();
+            let identity = IDSUserIdentity::new().unwrap();
 
-        if user.registration.is_none() {
-            info!("Registering new identity...");
-            register(config.as_ref(), &*connection.state.read().await, &mut vec![user.clone()], &identity).await.unwrap();
-        }
+            let mut users = vec![user];
 
-        user
-    }).await.unwrap();
+            if users[0].registration.is_none() {
+                info!("Registering new identity...");
+                register(
+                    config.as_ref(),
+                    &*connection.state.read().await,
+                    &mut users,
+                    &identity,
+                )
+                .await
+                .unwrap();
+            }
 
-    Arc::new(WrappedIDSUser { inner: user })
+            (users, identity)
+        })
+        .await
+        .unwrap();
+
+    Arc::new(WrappedIDSUsersWithIdentity {
+        users: users,
+        identity: identity,
+    })
 }
 
-
-
-
-
-
-
-// OLD ///////////////////////////////////////////////////////////////////////////// OLD /////////////////////////////////////////////////////////////////
+#[derive(uniffi::Object)]
+pub struct IMessageClient {
+    pub client: IMClient,
+}
 
 #[uniffi::export]
-pub async fn test() {
-    runtime().spawn(test_main()).await.unwrap();
+impl IMessageClient {
+    #[uniffi::constructor]
+    pub fn new(
+        connection: &WrappedAPSConnection,
+        users: &WrappedIDSUsersWithIdentity,
+        config: &WrappedOSConfig,
+    ) -> Arc<IMessageClient> {
+        let client = runtime().block_on(async move {
+            IMClient::new(
+                connection.inner.clone(),
+                users.users.clone(),
+                users.identity.clone(),
+                "id_cache.plist".into(),
+                config.config.clone(),
+                Box::new(move |updated_keys| {
+                    // state.users = updated_keys;
+                    // std::fs::write("config.plist", plist_to_string(&state).unwrap()).unwrap();
+                }),
+            )
+            .await
+        });
+
+        Arc::new(IMessageClient { client: client })
+    }
 }
 
-#[derive(Serialize, Deserialize, Clone)]
-struct SavedState {
-    push: APSState,
-    users: Vec<IDSUser>,
-    identity: IDSUserIdentity,
-}
+//impl
 
-pub fn plist_to_buf<T: serde::Serialize>(value: &T) -> Result<Vec<u8>, plist::Error> {
-    let mut buf: Vec<u8> = Vec::new();
-    let writer = Cursor::new(&mut buf);
-    plist::to_writer_xml(writer, &value)?;
-    Ok(buf)
-}
-
-pub fn plist_to_string<T: serde::Serialize>(value: &T) -> Result<String, plist::Error> {
-    plist_to_buf(value).map(|val| String::from_utf8(val).unwrap())
-}
-
-async fn read_input() -> String {
-    let stdin = io::stdin();
-    let mut reader = BufReader::new(stdin);
-    let mut username = String::new();
-    reader.read_line(&mut username).await.unwrap();
-    username
-}
-
-
+// OLD ///////////////////////////////////////////////////////////////////////////// OLD /////////////////////////////////////////////////////////////////
+/*
 async fn test_main() {
     let data: String = match fs::read_to_string("config.plist").await {
-		Ok(v) => v,
-		Err(e) => {
-			match e.kind() {
-				io::ErrorKind::NotFound => {
-					let _ = fs::File::create("config.plist").await.expect("Unable to create file").write_all(b"{}");
-					"{}".to_string()
-				}
-				_ => {
-				    error!("Unable to read file");
-					std::process::exit(1);
-				}
-			}
-		}
-	};
-    
-    
-    
+        Ok(v) => v,
+        Err(e) => {
+            match e.kind() {
+                io::ErrorKind::NotFound => {
+                    let _ = fs::File::create("config.plist").await.expect("Unable to create file").write_all(b"{}");
+                    "{}".to_string()
+                }
+                _ => {
+                    error!("Unable to read file");
+                    std::process::exit(1);
+                }
+            }
+        }
+    };
+
+
+
     // let config: Arc<MacOSConfig> = Arc::new(if let Ok(config) = plist::from_file("hwconfig.plist") {
     //     config
     // } else {
@@ -183,17 +203,17 @@ async fn test_main() {
         beeper_token: token,
     });
     fs::write("hwconfig.plist", plist_to_string(config.as_ref()).unwrap()).await.unwrap();
-	
+
     let saved_state: Option<SavedState> = plist::from_reader_xml(Cursor::new(&data)).ok();
 
-    let (connection, error) = 
+    let (connection, error) =
         APSConnectionResource::new(
             config.clone(),
             saved_state.as_ref().map(|state| state.push.clone()),
         )
         .await;
 
-    
+
     if let Some(error) = error {
         panic!("{}", error);
     }
@@ -243,7 +263,7 @@ async fn test_main() {
         users: users.clone()
     };
     fs::write("config.plist", plist_to_string(&state).unwrap()).await.unwrap();
-    
+
     let client = IMClient::new(connection.clone(), users, identity, "id_cache.plist".into(), config, Box::new(move |updated_keys| {
         state.users = updated_keys;
         std::fs::write("config.plist", plist_to_string(&state).unwrap()).unwrap();
@@ -261,7 +281,7 @@ async fn test_main() {
     std::io::stdout().flush().unwrap();
 
     let mut received_msgs = vec![];
-    
+
     loop {
         tokio::select! {
             msg = client.receive_wait() => {
@@ -330,6 +350,9 @@ async fn test_main() {
         }
     }
 }
+*/
+
+uniffi::setup_scaffolding!();
 
 // Tests
 #[cfg(test)]
@@ -347,4 +370,3 @@ mod tests {
     //     rt.block_on(login("test".to_string(), "test".to_string()));
     // }
 }
-uniffi::setup_scaffolding!();

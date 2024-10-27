@@ -15,6 +15,7 @@ pub fn runtime() -> &'static tokio::runtime::Runtime {
             .worker_threads(1)
             .thread_name("rustpushgo-tokio")
             .enable_all()
-            .build().unwrap()
+            .build()
+            .unwrap()
     })
 }
