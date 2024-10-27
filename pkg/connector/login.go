@@ -4,7 +4,7 @@ import (
 	"context"
 
 	"maunium.net/go/mautrix/bridgev2"
-	//"maunium.net/go/mautrix/bridgev2/database"
+	"maunium.net/go/mautrix/bridgev2/database"
 
 	"github.com/JJTech0130/imessage-rustpush/pkg/rustpushgo"
 )
@@ -21,11 +21,27 @@ func (im *IMessageConnector) GetLoginFlows() []bridgev2.LoginFlow {
 	}}
 }
 
+func (im *IMessageConnector) CreateLogin(ctx context.Context, user *bridgev2.User, flowID string) (bridgev2.LoginProcess, error) {
+	if flowID == "appleid" {
+		return &AppleIDLogin{
+			Connector: im,
+			User: user,
+		}, nil
+	}
+	panic("unimplemented")
+}
+
 type AppleIDLogin struct {
+	Connector *IMessageConnector
+
 	User *bridgev2.User
 	conn *rustpushgo.WrappedApsConnection
 	cfg *rustpushgo.WrappedOsConfig
 	usersAndIdentity *rustpushgo.IdsUsersWithIdentityRecord
+	username *string
+	relayCode *string
+
+	Client *IMessageClient
 }
 
 // Cancel implements bridgev2.LoginProcessUserInput.
@@ -72,6 +88,7 @@ func (a *AppleIDLogin) Start(ctx context.Context) (*bridgev2.LoginStep, error) {
 func (a *AppleIDLogin) SubmitUserInput(ctx context.Context, input map[string]string) (*bridgev2.LoginStep, error) {
 	if a.cfg == nil {
 		if code, ok := input["code"]; ok {
+			a.relayCode = &code
 			a.cfg = rustpushgo.CreateRelayConfig(code)
 		} else {
 			return RegistrationCodeStep, nil
@@ -83,6 +100,7 @@ func (a *AppleIDLogin) SubmitUserInput(ctx context.Context, input map[string]str
 	}
 	if a.usersAndIdentity == nil {
 		if username, ok := input["username"]; ok {
+			a.username = &username
 			if password, ok := input["password"]; ok {
 				result := rustpushgo.Login(username, password, a.cfg, a.conn)
 				a.usersAndIdentity = &result
@@ -94,20 +112,49 @@ func (a *AppleIDLogin) SubmitUserInput(ctx context.Context, input map[string]str
 		}
 	}
 
-	panic("unimplemented")
-	
-	// a.User.NewLogin(ctx, &database.UserLogin{
-	// 	ID: 
-	// })
+	a.Client = &IMessageClient{
+		Main:            a.Connector,
+		Client:          nil,
+		config:          a.cfg,
+		users:           a.usersAndIdentity.Users,
+		identity:        a.usersAndIdentity.Identity,
+		initialAPSState: rustpushgo.NewWrappedApsState(nil),
+	}
+
+	err := a.Client.Connect(ctx)
+	if err != nil {
+		return nil, err
+	}
+
+	login, err := a.User.NewLogin(ctx, &database.UserLogin{
+		ID: a.Client.getUserLoginID(),
+		RemoteName: *a.username,
+		Metadata: &UserLoginMetadata{
+			APSState:    a.Client.Connection.State().ToString(),
+			IDSUsers:    a.Client.users.ToString(),
+			IDSIdentity: a.Client.identity.ToString(),
+			RelayCode:   *a.relayCode,
+		},
+	}, &bridgev2.NewLoginParams{
+		LoadUserLogin: func(ctx context.Context, login *bridgev2.UserLogin) error {
+			login.Client = a.Client
+			return nil
+		},
+	})
+
+	if err != nil {	
+		return nil, err
+	}
+
+	return &bridgev2.LoginStep{
+		Type: bridgev2.LoginStepTypeComplete,
+		StepID: "imessage.appleid.complete",
+		Instructions: "Successfully logged in",
+		CompleteParams: &bridgev2.LoginCompleteParams{
+			UserLoginID: login.ID,
+			UserLogin: login,
+		},
+	}, nil
 }
 
 var _ bridgev2.LoginProcessUserInput = (*AppleIDLogin)(nil)
-
-func (im *IMessageConnector) CreateLogin(ctx context.Context, user *bridgev2.User, flowID string) (bridgev2.LoginProcess, error) {
-	if flowID == "appleid" {
-		return &AppleIDLogin{
-			User: user,
-		}, nil
-	}
-	panic("unimplemented")
-}

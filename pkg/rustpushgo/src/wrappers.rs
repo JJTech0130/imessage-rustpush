@@ -56,8 +56,13 @@ impl WrappedIDSUsers {
             inner: plist_from_string(&string.unwrap_or("".to_string())).unwrap(),
         })
     }
+    
     pub fn to_string(&self) -> String {
         plist_to_string(&self.inner).unwrap()
+    }
+
+    pub fn login_id(&self, i: u64) -> String {
+        self.inner[i as usize].user_id.clone()
     }
 }
 

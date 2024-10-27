@@ -64,6 +64,10 @@ func (i *IMessageClient) Disconnect() {
 	}
 }
 
+func (i *IMessageClient) getUserLoginID() networkid.UserLoginID {
+	return networkid.UserLoginID(i.users.LoginId(0))
+}
+
 // GetCapabilities implements bridgev2.NetworkAPI.
 func (i *IMessageClient) GetCapabilities(ctx context.Context, portal *bridgev2.Portal) *bridgev2.NetworkRoomCapabilities {
 	panic("unimplemented")
