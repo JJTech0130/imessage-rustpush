@@ -1,6 +1,6 @@
 use std::sync::Arc;
 
-use rustpush::{OSConfig, RelayConfig};
+use rustpush::RelayConfig;
 use uuid::Uuid;
 
 use crate::{ctx::runtime, wrappers::WrappedOSConfig};

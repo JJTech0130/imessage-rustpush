@@ -8,13 +8,13 @@ use std::{path::PathBuf, str::FromStr, sync::Arc, vec};
 use ctx::runtime;
 use icloud_auth::{AnisetteConfiguration, AppleAccount};
 
-use log::info;
+use log::{debug, info};
 use rustpush::{
-    authenticate_apple, get_gsa_config, register, 
-    APSConnectionResource, IDSUserIdentity, IMClient,
+    authenticate_apple, get_gsa_config, register, APSConnectionResource, IDSUserIdentity, IMClient
 };
+use tokio::sync::{mpsc, Mutex};
 use wrappers::{
-    WrappedAPSConnection, WrappedAPSState, WrappedIDSUsersWithIdentity, WrappedOSConfig,
+    WrappedAPSConnection, WrappedAPSState, WrappedIDSUsers, WrappedIDSUsersWithIdentity, WrappedOSConfig
 };
 
 #[uniffi::export]
@@ -108,9 +108,11 @@ pub async fn login(
     })
 }
 
+
 #[derive(uniffi::Object)]
 pub struct IMessageClient {
     pub client: IMClient,
+    pub users_update_channel: Mutex<mpsc::UnboundedReceiver<WrappedIDSUsers>>,
 }
 
 #[uniffi::export]
@@ -121,6 +123,8 @@ impl IMessageClient {
         users: &WrappedIDSUsersWithIdentity,
         config: &WrappedOSConfig,
     ) -> Arc<IMessageClient> {
+        let users_update_channel = tokio::sync::mpsc::unbounded_channel();
+
         let client = runtime().block_on(async move {
             IMClient::new(
                 connection.inner.clone(),
@@ -129,14 +133,26 @@ impl IMessageClient {
                 "id_cache.plist".into(),
                 config.config.clone(),
                 Box::new(move |updated_keys| {
-                    // state.users = updated_keys;
-                    // std::fs::write("config.plist", plist_to_string(&state).unwrap()).unwrap();
+                    users_update_channel.0.send(WrappedIDSUsers {
+                        inner: updated_keys,
+                    }).unwrap();
+                    debug!("Updated keys");
                 }),
             )
             .await
         });
 
-        Arc::new(IMessageClient { client: client })
+        Arc::new(IMessageClient { client: client, users_update_channel: Mutex::new(users_update_channel.1) })
+    }
+
+    pub async fn get_updated_users(&self) -> Arc<WrappedIDSUsers> {
+        Arc::new(self.users_update_channel.lock().await.recv().await.unwrap())
+    }
+
+    pub async fn reregister(self: Arc<Self>) {
+        runtime().spawn(async move {
+            self.client.identity.refresh_now().await.unwrap();
+        }).await.unwrap();
     }
 }
 

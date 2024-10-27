@@ -4,6 +4,8 @@ import (
 	//"maunium.net/go/mautrix/bridgev2/matrix/mxmain"
 
 	//"github.com/JJTech0130/imessage-rustpush/pkg/connector"
+	"time"
+
 	"github.com/JJTech0130/imessage-rustpush/pkg/rustpushgo"
 )
 var (
@@ -22,7 +24,21 @@ func main() {
 
 	im := rustpushgo.NewIMessageClient(conn, users, cfg)
 	
+	//println("State: "+ im.ToString())
 	println(im)
+
+	go func() {
+		for {
+		    users := im.GetUpdatedUsers()
+			println("Got updated users", users)
+		}
+	}()
+
+	time.Sleep(2 * time.Second)
+
+	im.Reregister()
+
+	time.Sleep(2 * time.Second)
 	//rustpushgo.Test()
 	//return
 	/*m := mxmain.BridgeMain{

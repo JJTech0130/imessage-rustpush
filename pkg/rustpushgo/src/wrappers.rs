@@ -1,6 +1,7 @@
 use std::sync::Arc;
 
 use rustpush::{APSConnection, APSState, IDSUser, IDSUserIdentity, OSConfig};
+use serde::Serialize;
 
 use crate::util::{plist_from_string, plist_to_string};
 
@@ -41,6 +42,11 @@ impl WrappedAPSConnection {
 pub struct WrappedIDSUsersWithIdentity {
     pub users: Vec<IDSUser>,
     pub identity: IDSUserIdentity,
+}
+
+#[derive(uniffi::Object, Clone, Serialize)]
+pub struct WrappedIDSUsers {
+    pub inner: Vec<IDSUser>,
 }
 
 #[derive(uniffi::Object)]
