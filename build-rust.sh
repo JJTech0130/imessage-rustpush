@@ -1,6 +1,7 @@
 #!/bin/sh
 set -e
 cd pkg/rustpushgo
+cargo fmt
 cargo build --release
 
 # Check if the uniffi-bindgen-go binary is installed, if not install it
