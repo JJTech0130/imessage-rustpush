@@ -25,7 +25,7 @@ func (im *IMessageConnector) CreateLogin(ctx context.Context, user *bridgev2.Use
 	if flowID == "appleid" {
 		return &AppleIDLogin{
 			Connector: im,
-			User: user,
+			User:      user,
 		}, nil
 	}
 	panic("unimplemented")
@@ -34,12 +34,12 @@ func (im *IMessageConnector) CreateLogin(ctx context.Context, user *bridgev2.Use
 type AppleIDLogin struct {
 	Connector *IMessageConnector
 
-	User *bridgev2.User
-	conn *rustpushgo.WrappedApsConnection
-	cfg *rustpushgo.WrappedOsConfig
+	User             *bridgev2.User
+	conn             *rustpushgo.WrappedApsConnection
+	cfg              *rustpushgo.WrappedOsConfig
 	usersAndIdentity *rustpushgo.IdsUsersWithIdentityRecord
-	username *string
-	relayCode *string
+	username         *string
+	relayCode        *string
 
 	Client *IMessageClient
 }
@@ -50,34 +50,34 @@ func (a *AppleIDLogin) Cancel() {
 }
 
 var RegistrationCodeStep = &bridgev2.LoginStep{
-	Type: bridgev2.LoginStepTypeUserInput,
+	Type:   bridgev2.LoginStepTypeUserInput,
 	StepID: "imessage.registration_code",
 	UserInputParams: &bridgev2.LoginUserInputParams{Fields: []bridgev2.LoginInputDataField{{
-		ID:       "code",
-		Name:    "Registration Code",
+		ID:   "code",
+		Name: "Registration Code",
 	}}},
 }
 
 var UsernamePasswordStep = &bridgev2.LoginStep{
-	Type: bridgev2.LoginStepTypeUserInput,
+	Type:   bridgev2.LoginStepTypeUserInput,
 	StepID: "imessage.appleid.username_and_password",
 	UserInputParams: &bridgev2.LoginUserInputParams{Fields: []bridgev2.LoginInputDataField{{
-		Type: 	  bridgev2.LoginInputFieldTypeEmail,
-		ID:       "username",
-		Name:    "Apple ID",
+		Type: bridgev2.LoginInputFieldTypeEmail,
+		ID:   "username",
+		Name: "Apple ID",
 	}, {
-		Type: 	  bridgev2.LoginInputFieldTypePassword,
-		ID:       "password",
-		Name:    "Password",
+		Type: bridgev2.LoginInputFieldTypePassword,
+		ID:   "password",
+		Name: "Password",
 	}}},
 }
 
 var TwoFactorStep = &bridgev2.LoginStep{
-	Type: bridgev2.LoginStepTypeUserInput,
+	Type:   bridgev2.LoginStepTypeUserInput,
 	StepID: "imessage.appleid.two_factor",
 	UserInputParams: &bridgev2.LoginUserInputParams{Fields: []bridgev2.LoginInputDataField{{
-		ID:       "code",
-		Name:    "Two Factor Code",
+		ID:   "code",
+		Name: "Two Factor Code",
 	}}},
 }
 
@@ -120,7 +120,7 @@ func (a *AppleIDLogin) SubmitUserInput(ctx context.Context, input map[string]str
 		identity:        a.usersAndIdentity.Identity,
 		initialAPSState: rustpushgo.NewWrappedApsState(nil),
 	}
-	
+
 	a.Client.Connection = a.conn
 
 	err := a.Client.Connect(ctx)
@@ -129,7 +129,7 @@ func (a *AppleIDLogin) SubmitUserInput(ctx context.Context, input map[string]str
 	}
 
 	login, err := a.User.NewLogin(ctx, &database.UserLogin{
-		ID: a.Client.getUserLoginID(),
+		ID:         a.Client.getUserLoginID(),
 		RemoteName: *a.username,
 		Metadata: &UserLoginMetadata{
 			APSState:    a.Client.Connection.State().ToString(),
@@ -145,17 +145,17 @@ func (a *AppleIDLogin) SubmitUserInput(ctx context.Context, input map[string]str
 		},
 	})
 
-	if err != nil {	
+	if err != nil {
 		return nil, err
 	}
 
 	return &bridgev2.LoginStep{
-		Type: bridgev2.LoginStepTypeComplete,
-		StepID: "imessage.appleid.complete",
+		Type:         bridgev2.LoginStepTypeComplete,
+		StepID:       "imessage.appleid.complete",
 		Instructions: "Successfully logged in",
 		CompleteParams: &bridgev2.LoginCompleteParams{
 			UserLoginID: login.ID,
-			UserLogin: login,
+			UserLogin:   login,
 		},
 	}, nil
 }

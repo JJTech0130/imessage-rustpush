@@ -17,7 +17,7 @@ func makeUserID(raw string) networkid.UserID {
 		} else {
 			return networkid.UserID(fmt.Sprintf("mailto:%s", raw))
 		}
-	} else{
+	} else {
 		// Check if it already has the tel: prefix
 		if strings.HasPrefix(raw, "tel:") {
 			return networkid.UserID(raw)

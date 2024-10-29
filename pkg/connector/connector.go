@@ -66,7 +66,7 @@ func (im *IMessageConnector) LoadUserLogin(ctx context.Context, login *bridgev2.
 
 	login.Client = &IMessageClient{
 		Main:            im,
-		UserLogin: 	 login,
+		UserLogin:       login,
 		config:          cfg,
 		users:           users,
 		identity:        identity,

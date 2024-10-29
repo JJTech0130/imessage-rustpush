@@ -1,44 +1,38 @@
 pub mod config;
 pub mod ctx;
-pub mod wrappers;
 mod util;
+pub mod wrappers;
 
 use std::{path::PathBuf, str::FromStr, sync::Arc, vec};
 
-use ctx::runtime;
 use icloud_auth::{AnisetteConfiguration, AppleAccount};
 
 use log::{debug, info};
 use rustpush::{
-    authenticate_apple, get_gsa_config, register, APSConnectionResource, IDSUserIdentity, IMClient
+    authenticate_apple, get_gsa_config, register, APSConnectionResource, IDSUserIdentity, IMClient,
 };
 use tokio::sync::{mpsc, Mutex};
 use wrappers::{
-    IDSUsersWithIdentityRecord, WrappedAPSConnection, WrappedAPSState, WrappedIDSUserIdentity, WrappedIDSUsers, WrappedOSConfig
+    IDSUsersWithIdentityRecord, WrappedAPSConnection, WrappedAPSState, WrappedIDSUserIdentity,
+    WrappedIDSUsers, WrappedOSConfig,
 };
 
-#[uniffi::export]
+#[uniffi::export(async_runtime = "tokio")]
 pub async fn connect(
     config: &WrappedOSConfig,
     state: &WrappedAPSState,
 ) -> Arc<WrappedAPSConnection> {
     let config = config.config.clone();
     let state = state.inner.clone();
-    let connection = runtime()
-        .spawn(async move {
-            let (connection, error) = APSConnectionResource::new(config, state).await;
-            if let Some(error) = error {
-                panic!("{}", error);
-            }
-            connection
-        })
-        .await
-        .unwrap();
+    let (connection, error) = APSConnectionResource::new(config, state).await;
+    if let Some(error) = error {
+        panic!("{}", error);
+    }
 
     Arc::new(WrappedAPSConnection { inner: connection })
 }
 
-#[uniffi::export]
+#[uniffi::export(async_runtime = "tokio")]
 pub async fn login(
     apple_id: String,
     password: String,
@@ -61,57 +55,45 @@ pub async fn login(
         input.trim().to_string()
     };
 
-    let (users, identity) = runtime()
-        .spawn(async move {
-            let acc = AppleAccount::login(
-                appleid_closure,
-                tfa_closure,
-                AnisetteConfiguration::new()
-                    .set_client_info(get_gsa_config(
-                        &*connection.state.read().await,
-                        config.as_ref(),
-                    ))
-                    .set_configuration_path(PathBuf::from_str("anisette_test").unwrap()),
-            )
-            .await;
+    let acc = AppleAccount::login(
+        appleid_closure,
+        tfa_closure,
+        AnisetteConfiguration::new()
+            .set_client_info(get_gsa_config(
+                &*connection.state.read().await,
+                config.as_ref(),
+            ))
+            .set_configuration_path(PathBuf::from_str("anisette_test").unwrap()),
+    )
+    .await;
 
-            let account = acc.unwrap();
-            let pet = account.get_pet().unwrap();
-            let user = authenticate_apple(&user_trimmed, &pet, config.as_ref())
-                .await
-                .unwrap();
-
-            let identity = IDSUserIdentity::new().unwrap();
-
-            let mut users = vec![user];
-
-            if users[0].registration.is_none() {
-                info!("Registering new identity...");
-                register(
-                    config.as_ref(),
-                    &*connection.state.read().await,
-                    &mut users,
-                    &identity,
-                )
-                .await
-                .unwrap();
-            }
-
-            (users, identity)
-        })
+    let account = acc.unwrap();
+    let pet = account.get_pet().unwrap();
+    let user = authenticate_apple(&user_trimmed, &pet, config.as_ref())
         .await
         .unwrap();
 
+    let identity = IDSUserIdentity::new().unwrap();
+
+    let mut users = vec![user];
+
+    if users[0].registration.is_none() {
+        info!("Registering new identity...");
+        register(
+            config.as_ref(),
+            &*connection.state.read().await,
+            &mut users,
+            &identity,
+        )
+        .await
+        .unwrap();
+    }
+
     IDSUsersWithIdentityRecord {
-        users: Arc::new(WrappedIDSUsers {
-            inner: users
-        }),
-        identity: Arc::new(WrappedIDSUserIdentity {
-            inner: identity
-        }),
+        users: Arc::new(WrappedIDSUsers { inner: users }),
+        identity: Arc::new(WrappedIDSUserIdentity { inner: identity }),
     }
 }
-
 
 #[derive(uniffi::Object)]
 pub struct Client {
@@ -119,55 +101,92 @@ pub struct Client {
     pub users_update_channel: Mutex<mpsc::UnboundedReceiver<WrappedIDSUsers>>,
 }
 
-#[uniffi::export]
+#[uniffi::export(async_runtime = "tokio")]
+pub async fn new_client(
+    connection: &WrappedAPSConnection,
+    users: &WrappedIDSUsers,
+    identity: &WrappedIDSUserIdentity,
+    config: &WrappedOSConfig,
+) -> Arc<Client> {
+    let users_update_channel = tokio::sync::mpsc::unbounded_channel();
+
+    let connection_clone = connection.inner.clone();
+    let users_clone = users.inner.clone();
+    let identity_clone = identity.inner.clone();
+    let config_clone = config.config.clone();
+
+    let client = IMClient::new(
+        connection_clone,
+        users_clone,
+        identity_clone,
+        "id_cache.plist".into(),
+        config_clone,
+        Box::new(move |updated_keys| {
+            users_update_channel
+                .0
+                .send(WrappedIDSUsers {
+                    inner: updated_keys,
+                })
+                .unwrap();
+            debug!("Updated keys");
+        }),
+    )
+    .await;
+
+    Arc::new(Client {
+        client: client,
+        users_update_channel: Mutex::new(users_update_channel.1),
+    })
+}
+
+#[uniffi::export(async_runtime = "tokio")]
 impl Client {
-    #[uniffi::constructor]
-    pub fn new(
-        connection: &WrappedAPSConnection,
-        users: &WrappedIDSUsers,
-        identity: &WrappedIDSUserIdentity,
-        config: &WrappedOSConfig,
-    ) -> Arc<Client> {
-        let users_update_channel = tokio::sync::mpsc::unbounded_channel();
-
-        let client = runtime().block_on(async move {
-            IMClient::new(
-                connection.inner.clone(),
-                users.inner.clone(),
-                identity.inner.clone(),
-                "id_cache.plist".into(),
-                config.config.clone(),
-                Box::new(move |updated_keys| {
-                    users_update_channel.0.send(WrappedIDSUsers {
-                        inner: updated_keys,
-                    }).unwrap();
-                    debug!("Updated keys");
-                }),
-            )
-            .await
-        });
-
-        Arc::new(Client { client: client, users_update_channel: Mutex::new(users_update_channel.1) })
-    }
-
     pub async fn get_updated_users(&self) -> Arc<WrappedIDSUsers> {
         Arc::new(self.users_update_channel.lock().await.recv().await.unwrap())
     }
 
     pub async fn reregister(self: Arc<Self>) {
-        runtime().spawn(async move {
-            self.client.identity.refresh_now().await.unwrap();
-        }).await.unwrap();
+        self.client.identity.refresh_now().await.unwrap();
     }
 
     pub async fn get_handles(self: Arc<Self>) -> Vec<String> {
         self.client.identity.get_handles().await
     }
 
-    pub async fn validate_targets(self: Arc<Self>, targets: Vec<String>, handle: String) -> Vec<String>  {
-        runtime().spawn(async move {
-            self.client.identity.validate_targets(&targets, &handle).await.unwrap()
-        }).await.unwrap()
+    pub async fn validate_targets(
+        self: Arc<Self>,
+        targets: Vec<String>,
+        handle: String,
+    ) -> Vec<String> {
+        self.client
+            .identity
+            .validate_targets(&targets, &handle)
+            .await
+            .unwrap()
+    }
+
+    pub fn disconnect(self: Arc<Self>) {
+        debug!("Disconnecting client");
+        // Send something down the channel
+        self.users_update_channel.blocking_lock().close();
+        //let channel = self.users_update_channel.lock().await;
+        //drop(channel.try_into());
+
+        //self.users_update_channel.lock().await.close();
+        //debug!("Arc count: {}", Arc::strong_count(&self));
+
+        // Drop the client
+        //self.client = None;
+    }
+}
+
+// On drop
+impl Drop for Client {
+    fn drop(&mut self) {
+        println!("Dropping client");
+        // runtime().block_on(async {
+        //     self.client.shutdown().await.unwrap();
+        // });
     }
 }
 
@@ -197,7 +216,7 @@ async fn test_main() {
     // let config: Arc<MacOSConfig> = Arc::new(if let Ok(config) = plist::from_file("hwconfig.plist") {
     //     config
     // } else {
-    //     println!("Missing hardware config!");
+    // /    println!("Missing hardware config!");
     //     println!("The easiest way to get your hardware config is to extract it from validation data from a Mac.");
     //     println!("This validation data will not be used to authenticate, and therefore does not need to be recent or valid.");
     //     println!("If you need help obtaining validation data, please visit https://github.com/beeper/mac-registration-provider");

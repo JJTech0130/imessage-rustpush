@@ -34,6 +34,7 @@ func (i *IMessageClient) updateUsersLoop(ctx context.Context) {
 	for {
 		select {
 		case <-ctx.Done():
+			log.Debug().Msg("updateUsersLoop cancelled")
 			return
 		default:
 			i.users = i.Client.GetUpdatedUsers()
@@ -57,18 +58,18 @@ func (i *IMessageClient) Connect(ctx context.Context) error {
 	}
 	i.Client = rustpushgo.NewClient(i.Connection, i.users, i.identity, i.config)
 
-	i.startLoops()
+	//i.startLoops()
 	return nil
 }
 
 func (i *IMessageClient) Disconnect() {
+	log.Debug().Msg("Disconnecting")
 	if stopLoops := i.stopLoops.Swap(nil); stopLoops != nil {
 		(*stopLoops)()
 	}
-	if cli := i.Client; cli != nil {
-		//cli.Disconnect()
-		i.Client = nil
-	}
+
+	i.Client.Destroy()
+	i.Client = nil
 }
 
 func (i *IMessageClient) getUserLoginID() networkid.UserLoginID {
@@ -81,8 +82,8 @@ func (i *IMessageClient) getUserID() networkid.UserID {
 
 func (i *IMessageClient) ResolveIdentifier(ctx context.Context, identifier string, createChat bool) (*bridgev2.ResolveIdentifierResponse, error) {
 	userID := makeUserID(identifier)
-	portalID := networkid.PortalKey {
-		ID: networkid.PortalID(userID),
+	portalID := networkid.PortalKey{
+		ID:       networkid.PortalID(userID),
 		Receiver: i.UserLogin.ID,
 	}
 	ghost, err := i.UserLogin.Bridge.GetGhostByID(ctx, userID)
@@ -99,13 +100,13 @@ func (i *IMessageClient) ResolveIdentifier(ctx context.Context, identifier strin
 	}
 	portalInfo, _ := i.GetChatInfo(ctx, portal)
 	return &bridgev2.ResolveIdentifierResponse{
-		Ghost: ghost,
-		UserID: userID,
+		Ghost:    ghost,
+		UserID:   userID,
 		UserInfo: ghostInfo,
 		Chat: &bridgev2.CreateChatResponse{
-			Portal: portal,
+			Portal:     portal,
 			PortalInfo: portalInfo,
-			PortalKey: portalID,
+			PortalKey:  portalID,
 		},
 	}, nil
 }
@@ -123,7 +124,7 @@ func (i *IMessageClient) GetChatInfo(ctx context.Context, portal *bridgev2.Porta
 				{
 					EventSender: bridgev2.EventSender{
 						IsFromMe: true,
-						Sender:  i.getUserID(),
+						Sender:   i.getUserID(),
 					},
 					Membership: event.MembershipJoin,
 					PowerLevel: ptr.Ptr(50),
@@ -146,7 +147,7 @@ func (i *IMessageClient) GetUserInfo(ctx context.Context, ghost *bridgev2.Ghost)
 	}
 	return &bridgev2.UserInfo{
 		Identifiers: []string{string(ghost.ID)},
-		Name: 	  ptr.Ptr(string(ghost.ID)),
+		Name:        ptr.Ptr(string(ghost.ID)),
 	}, nil
 }
 

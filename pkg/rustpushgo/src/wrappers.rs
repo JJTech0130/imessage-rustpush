@@ -56,7 +56,7 @@ impl WrappedIDSUsers {
             inner: plist_from_string(&string.unwrap_or("".to_string())).unwrap(),
         })
     }
-    
+
     pub fn to_string(&self) -> String {
         plist_to_string(&self.inner).unwrap()
     }
