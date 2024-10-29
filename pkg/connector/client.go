@@ -3,7 +3,6 @@ package connector
 import (
 	"context"
 	"fmt"
-	"sync/atomic"
 
 	"github.com/JJTech0130/imessage-rustpush/pkg/rustpushgo"
 	"github.com/rs/zerolog/log"
@@ -25,48 +24,24 @@ type IMessageClient struct {
 	initialAPSState *rustpushgo.WrappedApsState
 
 	Connection *rustpushgo.WrappedApsConnection
-
-	stopLoops atomic.Pointer[context.CancelFunc]
 }
 
-func (i *IMessageClient) updateUsersLoop(ctx context.Context) {
-	// TODO: I don't think this is correct
-	for {
-		select {
-		case <-ctx.Done():
-			log.Debug().Msg("updateUsersLoop cancelled")
-			return
-		default:
-			i.users = i.Client.GetUpdatedUsers()
-		}
-		log.Debug().Any("users", i.users.ToString()).Msg("Got updated users")
-	}
-}
-
-func (i *IMessageClient) startLoops() {
-	ctx, cancel := context.WithCancel(context.Background())
-	oldStop := i.stopLoops.Swap(&cancel)
-	if oldStop != nil {
-		(*oldStop)()
-	}
-	go i.updateUsersLoop(ctx)
+func (i *IMessageClient) UpdateUsers(users *rustpushgo.WrappedIdsUsers) {
+	i.users = users
+	log.Debug().Any("users", i.users.ToString()).Msg("Got updated users")
 }
 
 func (i *IMessageClient) Connect(ctx context.Context) error {
 	if i.Connection == nil {
 		i.Connection = rustpushgo.Connect(i.config, i.initialAPSState)
 	}
-	i.Client = rustpushgo.NewClient(i.Connection, i.users, i.identity, i.config)
+	i.Client = rustpushgo.NewClient(i.Connection, i.users, i.identity, i.config, i)
 
-	//i.startLoops()
 	return nil
 }
 
 func (i *IMessageClient) Disconnect() {
 	log.Debug().Msg("Disconnecting")
-	if stopLoops := i.stopLoops.Swap(nil); stopLoops != nil {
-		(*stopLoops)()
-	}
 
 	i.Client.Destroy()
 	i.Client = nil
@@ -173,3 +148,4 @@ func (i *IMessageClient) LogoutRemote(ctx context.Context) {
 
 var _ bridgev2.NetworkAPI = (*IMessageClient)(nil)
 var _ bridgev2.IdentifierResolvingNetworkAPI = (*IMessageClient)(nil)
+var _ rustpushgo.UpdateUsersCallback = (*IMessageClient)(nil)

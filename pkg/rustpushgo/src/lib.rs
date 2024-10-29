@@ -1,3 +1,4 @@
+pub mod callback;
 pub mod config;
 pub mod ctx;
 mod util;
@@ -11,7 +12,6 @@ use log::{debug, info};
 use rustpush::{
     authenticate_apple, get_gsa_config, register, APSConnectionResource, IDSUserIdentity, IMClient,
 };
-use tokio::sync::{mpsc, Mutex};
 use wrappers::{
     IDSUsersWithIdentityRecord, WrappedAPSConnection, WrappedAPSState, WrappedIDSUserIdentity,
     WrappedIDSUsers, WrappedOSConfig,
@@ -98,7 +98,6 @@ pub async fn login(
 #[derive(uniffi::Object)]
 pub struct Client {
     pub client: IMClient,
-    pub users_update_channel: Mutex<mpsc::UnboundedReceiver<WrappedIDSUsers>>,
 }
 
 #[uniffi::export(async_runtime = "tokio")]
@@ -107,9 +106,8 @@ pub async fn new_client(
     users: &WrappedIDSUsers,
     identity: &WrappedIDSUserIdentity,
     config: &WrappedOSConfig,
+    update_users_callback: Box<dyn callback::UpdateUsersCallback>,
 ) -> Arc<Client> {
-    let users_update_channel = tokio::sync::mpsc::unbounded_channel();
-
     let connection_clone = connection.inner.clone();
     let users_clone = users.inner.clone();
     let identity_clone = identity.inner.clone();
@@ -122,29 +120,19 @@ pub async fn new_client(
         "id_cache.plist".into(),
         config_clone,
         Box::new(move |updated_keys| {
-            users_update_channel
-                .0
-                .send(WrappedIDSUsers {
-                    inner: updated_keys,
-                })
-                .unwrap();
+            update_users_callback.update_users(Arc::new(WrappedIDSUsers {
+                inner: updated_keys,
+            }));
             debug!("Updated keys");
         }),
     )
     .await;
 
-    Arc::new(Client {
-        client: client,
-        users_update_channel: Mutex::new(users_update_channel.1),
-    })
+    Arc::new(Client { client: client })
 }
 
 #[uniffi::export(async_runtime = "tokio")]
 impl Client {
-    pub async fn get_updated_users(&self) -> Arc<WrappedIDSUsers> {
-        Arc::new(self.users_update_channel.lock().await.recv().await.unwrap())
-    }
-
     pub async fn reregister(self: Arc<Self>) {
         self.client.identity.refresh_now().await.unwrap();
     }
@@ -164,29 +152,11 @@ impl Client {
             .await
             .unwrap()
     }
-
-    pub fn disconnect(self: Arc<Self>) {
-        debug!("Disconnecting client");
-        // Send something down the channel
-        self.users_update_channel.blocking_lock().close();
-        //let channel = self.users_update_channel.lock().await;
-        //drop(channel.try_into());
-
-        //self.users_update_channel.lock().await.close();
-        //debug!("Arc count: {}", Arc::strong_count(&self));
-
-        // Drop the client
-        //self.client = None;
-    }
 }
 
-// On drop
 impl Drop for Client {
     fn drop(&mut self) {
-        println!("Dropping client");
-        // runtime().block_on(async {
-        //     self.client.shutdown().await.unwrap();
-        // });
+        debug!("Dropping client");
     }
 }
 
