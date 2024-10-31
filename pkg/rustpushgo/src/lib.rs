@@ -4,7 +4,7 @@ pub mod ctx;
 mod util;
 pub mod wrappers;
 
-use std::{path::PathBuf, str::FromStr, sync::Arc, vec};
+use std::{path::PathBuf, str::FromStr, sync::Arc, time::Duration, vec};
 
 use icloud_auth::{AnisetteConfiguration, AppleAccount};
 
@@ -12,6 +12,7 @@ use log::{debug, info};
 use rustpush::{
     authenticate_apple, get_gsa_config, register, APSConnectionResource, IDSUserIdentity, IMClient,
 };
+use tokio::time::sleep;
 use wrappers::{
     IDSUsersWithIdentityRecord, WrappedAPSConnection, WrappedAPSState, WrappedIDSUserIdentity,
     WrappedIDSUsers, WrappedOSConfig,
@@ -128,7 +129,21 @@ pub async fn new_client(
     )
     .await;
 
-    Arc::new(Client { client: client })
+    let client = Arc::new(Client { client: client });
+    let client_clone = client.clone();
+
+    tokio::spawn(async move {
+        loop {
+            sleep(Duration::from_secs(1)).await;
+            match client_clone.client.receive_wait().await {
+                Ok(Some(msg)) => debug!("got message {:?}", msg.message.to_string()),
+                Ok(None) => debug!("no message received"),
+                Err(e) => debug!("error receiving message: {:?}", e),
+            }
+        }
+    });
+
+    client
 }
 
 #[uniffi::export(async_runtime = "tokio")]

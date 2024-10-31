@@ -1,9 +1,6 @@
-use std::{
-    fmt::{Debug, Display, Formatter},
-    sync::Arc,
-};
+use std::{fmt::Debug, sync::Arc};
 
-use rustpush::{APSConnection, APSState, IDSUser, IDSUserIdentity, OSConfig, PushError};
+use rustpush::{APSConnection, APSState, IDSUser, IDSUserIdentity, OSConfig};
 use thiserror::Error;
 
 use crate::util::{plist_from_string, plist_to_string};

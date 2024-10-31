@@ -12,7 +12,7 @@ pub async fn create_relay_config(code: String) -> Result<Arc<WrappedOSConfig>, W
     let config: Arc<RelayConfig> = Arc::new(RelayConfig {
         version: RelayConfig::get_versions(&host, &code, &token)
             .await
-            .map_err(|e| WrappedError::GenericError)?,
+            .map_err(|_| WrappedError::GenericError)?,
         icloud_ua: "com.apple.iCloudHelper/282 CFNetwork/1408.0.4 Darwin/22.5.0".to_string(),
         aoskit_version: "com.apple.AOSKit/282 (com.apple.accountsd/113)".to_string(),
         dev_uuid: Uuid::new_v4().to_string(),
