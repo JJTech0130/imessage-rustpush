@@ -9,6 +9,7 @@ use std::{path::PathBuf, str::FromStr, sync::Arc, time::Duration, vec};
 use icloud_auth::{AnisetteConfiguration, AppleAccount};
 
 use log::{debug, info};
+use rustls::client;
 use rustpush::{
     authenticate_apple, get_gsa_config, register, APSConnectionResource, IDSUserIdentity, IMClient,
 };
@@ -98,7 +99,8 @@ pub async fn login(
 
 #[derive(uniffi::Object)]
 pub struct Client {
-    pub client: IMClient,
+    pub client: Arc<IMClient>,
+    receive_handle: tokio::task::JoinHandle<()>,
 }
 
 #[uniffi::export(async_runtime = "tokio")]
@@ -114,28 +116,28 @@ pub async fn new_client(
     let identity_clone = identity.inner.clone();
     let config_clone = config.config.clone();
 
-    let client = IMClient::new(
-        connection_clone,
-        users_clone,
-        identity_clone,
-        "id_cache.plist".into(),
-        config_clone,
-        Box::new(move |updated_keys| {
-            update_users_callback.update_users(Arc::new(WrappedIDSUsers {
-                inner: updated_keys,
-            }));
-            debug!("Updated keys");
-        }),
-    )
-    .await;
+    let client = Arc::new(
+        IMClient::new(
+            connection_clone,
+            users_clone,
+            identity_clone,
+            "id_cache.plist".into(),
+            config_clone,
+            Box::new(move |updated_keys| {
+                update_users_callback.update_users(Arc::new(WrappedIDSUsers {
+                    inner: updated_keys,
+                }));
+                debug!("Updated keys");
+            }),
+        )
+        .await,
+    );
 
-    let client = Arc::new(Client { client: client });
     let client_clone = client.clone();
 
-    tokio::spawn(async move {
+    let receive_handle = tokio::spawn(async move {
         loop {
-            sleep(Duration::from_secs(1)).await;
-            match client_clone.client.receive_wait().await {
+            match client_clone.receive_wait().await {
                 Ok(Some(msg)) => debug!("got message {:?}", msg.message.to_string()),
                 Ok(None) => debug!("no message received"),
                 Err(e) => debug!("error receiving message: {:?}", e),
@@ -143,7 +145,10 @@ pub async fn new_client(
         }
     });
 
-    client
+    Arc::new(Client {
+        client: client,
+        receive_handle: receive_handle,
+    })
 }
 
 #[uniffi::export(async_runtime = "tokio")]
@@ -172,6 +177,7 @@ impl Client {
 impl Drop for Client {
     fn drop(&mut self) {
         debug!("Dropping client");
+        self.receive_handle.abort();
     }
 }
 

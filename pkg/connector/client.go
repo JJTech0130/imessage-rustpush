@@ -28,6 +28,8 @@ type IMessageClient struct {
 
 func (i *IMessageClient) UpdateUsers(users *rustpushgo.WrappedIdsUsers) {
 	i.users = users
+	i.UserLogin.Metadata.(*UserLoginMetadata).IDSUsers = users.ToString()
+	i.UserLogin.Save(context.TODO())
 	log.Debug().Any("users", i.users.ToString()).Msg("Got updated users")
 }
 
