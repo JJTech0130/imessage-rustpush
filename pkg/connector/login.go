@@ -89,7 +89,11 @@ func (a *AppleIDLogin) SubmitUserInput(ctx context.Context, input map[string]str
 	if a.cfg == nil {
 		if code, ok := input["code"]; ok {
 			a.relayCode = &code
-			a.cfg = rustpushgo.CreateRelayConfig(code)
+			cfg, err := rustpushgo.CreateRelayConfig(code)
+			if err != nil {
+				return RegistrationCodeStep, err
+			}
+			a.cfg = cfg
 		} else {
 			return RegistrationCodeStep, nil
 		}

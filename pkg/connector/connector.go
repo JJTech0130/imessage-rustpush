@@ -7,7 +7,6 @@ import (
 	"go.mau.fi/util/configupgrade"
 	"maunium.net/go/mautrix/bridgev2"
 	"maunium.net/go/mautrix/bridgev2/database"
-	//"github.com/JJTech0130/imessage-rustpush/pkg/rustpushgo"
 )
 
 type IMessageConnector struct {
@@ -62,7 +61,10 @@ func (im *IMessageConnector) LoadUserLogin(ctx context.Context, login *bridgev2.
 	users := rustpushgo.NewWrappedIdsUsers(&meta.IDSUsers)
 	identity := rustpushgo.NewWrappedIdsUserIdentity(&meta.IDSIdentity)
 	initialAPSState := rustpushgo.NewWrappedApsState(&meta.APSState)
-	cfg := rustpushgo.CreateRelayConfig(meta.RelayCode)
+	cfg, err := rustpushgo.CreateRelayConfig(meta.RelayCode)
+	if err != nil {
+		return err
+	}
 
 	login.Client = &IMessageClient{
 		Main:            im,

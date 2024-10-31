@@ -1,6 +1,10 @@
-use std::sync::Arc;
+use std::{
+    fmt::{Debug, Display, Formatter},
+    sync::Arc,
+};
 
-use rustpush::{APSConnection, APSState, IDSUser, IDSUserIdentity, OSConfig};
+use rustpush::{APSConnection, APSState, IDSUser, IDSUserIdentity, OSConfig, PushError};
+use thiserror::Error;
 
 use crate::util::{plist_from_string, plist_to_string};
 
@@ -87,4 +91,10 @@ impl WrappedIDSUserIdentity {
 #[derive(uniffi::Object)]
 pub struct WrappedOSConfig {
     pub config: Arc<dyn OSConfig>,
+}
+
+#[derive(Error, uniffi::Error, Debug)]
+pub enum WrappedError {
+    #[error("Generic error")]
+    GenericError,
 }
