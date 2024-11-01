@@ -65,7 +65,7 @@ pub async fn login(
                 &*connection.state.read().await,
                 config.as_ref(),
             ))
-            .set_configuration_path(PathBuf::from_str("anisette_test").unwrap()),
+            .set_configuration_path(PathBuf::from_str("state").unwrap()),
     )
     .await;
 
@@ -121,7 +121,7 @@ pub async fn new_client(
             connection_clone,
             users_clone,
             identity_clone,
-            "id_cache.plist".into(),
+            "state/id_cache.plist".into(),
             config_clone,
             Box::new(move |updated_keys| {
                 update_users_callback.update_users(Arc::new(WrappedIDSUsers {
