@@ -4,7 +4,7 @@
 As you might need to make changes to upstream rustpush at the same time, here is the recommended way to set up your development environment:
 ```bash
 git clone https://github.com/JJTech0130/imessage-rustpush.git
-git clone https://github.com/OpenBubble/rustpush.git
+git clone https://github.com/OpenBubbles/rustpush.git
 ```
 
 Then, you can open `imessage-rustpush.code-workspace` in VSCode and it should have both projects loaded.
